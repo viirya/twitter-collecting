@@ -1,0 +1,10 @@
+
+exports.mongodb =
+    host: ''
+    port: 27017
+    options: {auto_reconnect: true}
+    db: 'tweets'
+    collection: 'tweet'
+    username: ''
+    password: ''
+

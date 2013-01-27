@@ -1,0 +1,115 @@
+
+http = require('http')
+Buffer = require('buffer').Buffer
+EventEmitter = require('events').EventEmitter
+_ = require('underscore')
+cli = require('cli')
+prompt = require('prompt')
+#mongo = require('mongodb')
+MongoDatabase = require('./mongo').MongoDatabase
+twitterstream = require('twitter-stream')
+config = require('./config')
+assert = require('assert')
+
+
+options = cli.parse
+  username: ['u', 'Your twitter username', 'string'],
+  password: ['p', 'Your twitter password', 'string'],
+  track: ['t', 'The keywords to track', 'string', ''],
+
+prompt.start();
+properties = [
+        name: 'username', 
+        validator: /^[a-zA-Z\s\-]+$/,
+        warning: 'Name must be only letters, spaces, or dashes',
+        empty: false
+    ,
+        name: 'password',
+        hidden: true
+    ,
+        name: 'db_username', 
+        validator: /^[a-zA-Z\s\-]+$/,
+        warning: 'Name must be only letters, spaces, or dashes',
+        empty: false
+    ,
+        name: 'db_password',
+        hidden: true
+ 
+];
+
+collecting = (cb) ->
+    (err, result) <- prompt.get(properties, _)
+        options.username = result.username
+        options.password = result.password
+        config.mongodb.username = result.db_username
+        config.mongodb.password = result.db_password
+        cb()
+
+() <- collecting!
+
+    mongodb = new MongoDatabase(config.mongodb)
+    mongodb.init() 
+ 
+    twitter_options =
+        screen_name: options.username
+        password: options.password
+        action: 'filter' 
+        params: {}
+
+    if options.track? and options.track isnt ''
+        twitter_options.params.track = options.track
+    else
+        twitter_options.params.locations = '-180,-90,180,90'
+
+    update_date = ->
+        date = new Date!
+        [date.getFullYear!, date.getMonth! + 1, date.getMinutes!]
+    
+    [year, month, min] = update_date!
+
+    (collection) <~ mongodb.operate(_, "#{config.mongodb.db}_#{year}_#{month}")
+
+        twitterstream = require('twitter-stream')
+        stream = twitterstream.connect(twitter_options)
+
+        collection_keep = collection
+
+        begin_streaming = (stream) ->
+
+            (err) <- stream.on('error', _)
+                console.log('error:')
+                console.log(err)
+            
+            (tweet) <- stream.on('status', _)
+                #console.log(tweet)
+                try
+                    if tweet.text?
+                        #console.log tweet.user.screen_name + ': ' + tweet.text
+                        if collection_keep?
+                            (err, result) <- collection_keep.insert(tweet, {safe:true}, _)
+                                assert.equal(null, err)
+
+                    else if tweet.limit?
+                        # console.log tweetText
+                    else
+                        console.log 'ERROR'
+                        console.log tweetText
+                        throw 'unknown tweet type'
+                catch error
+                    console.log(error)
+ 
+                [cur_year, cur_month, cur_min] = update_date!
+
+                if cur_month isnt month
+                    console.log("Create new collection: #{cur_year}_#{cur_month}")
+
+                    collection_keep = null
+                    mongodb.close!
+                    
+                    [year, month, min] = [cur_year, cur_month, cur_min]
+
+                    (collection, close_handler) <~ mongodb.operate(_, "#{config.mongodb.db}_#{year}_#{month}")
+                        collection_keep = collection
+
+        begin_streaming(stream)
+

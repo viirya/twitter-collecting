@@ -1,0 +1,26 @@
+{
+  "author": "Liang-Chi Hsieh <viirya@gmail.com>",
+  "name": "twitter-collecting",
+  "description": "Scripts used to collect tweets",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/viirya/twitter-collecting.git"
+  },
+  "engines": {
+    "node": "~v0.4.11"
+  },
+  "dependencies": {
+    "underscore":"latest",
+    "cli":"latest",
+    "line-parser":"latest",
+    "prompt":"latest",
+    "mongodb":"latest",
+    "lazy":"latest",
+    "natural": "latest",
+    "webworker": "latest",
+    "twitter-stream": "latest",
+    "cozy-script": "latest"
+  },
+  "devDependencies": {}
+}

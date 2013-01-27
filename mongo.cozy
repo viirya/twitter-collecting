@@ -1,0 +1,39 @@
+
+mongo = require('mongodb')
+assert = require('assert')
+
+Server = mongo.Server
+Db = mongo.Db
+
+class Database
+    constructor: (@config) ->
+    init: ->
+    operate: (cb) ->
+
+class MongoDatabase extends Database
+
+    init: ->
+        @server = new Server(@config.host, @config.port, @config.options)
+        @db = new Db(@config.db, @server, {journal: true})
+    
+    operate: (cb, col = @config.collection) -> 
+        (err, db) <~ @db.open!
+            if (!err)
+                #console.log(@config)
+                (err, result) <~ db.authenticate(@config.username, @config.password, _)
+                    assert.equal(true, result)
+        
+                    (err, collection) <~ db.collection(col, _)
+                        cb(collection)
+            else
+                console.log(err)
+
+    close: ->
+        @db.close!
+
+    select_collection: (db_collection, cb) ->
+        (err, collection) <- db.collection(db_collection, _)
+            cb(collection)
+    
+exports.MongoDatabase = MongoDatabase
+
