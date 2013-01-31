@@ -33,7 +33,7 @@
   properties = [
     {
       name: 'username',
-      validator: /^[a-zA-Z\s\-]+$/,
+      validator: /^[a-zA-Z\s\-_]+$/,
       warning: 'Name must be only letters, spaces, or dashes',
       empty: false
     }, {
@@ -61,7 +61,7 @@
   };
 
   collecting(function() {
-    var min, mongodb, month, twitter_options, update_date, year, _ref,
+    var get_date, mongodb, month, twitter_options, update_date, update_date_function, year, _ref, _ref1,
       _this = this;
     mongodb = new MongoDatabase(config.mongodb);
     mongodb.init();
@@ -77,26 +77,54 @@
       twitter_options.params.locations = '-180,-90,180,90';
     }
     update_date = function() {
-      var date;
-      date = new Date();
-      return [date.getFullYear(), date.getMonth() + 1, date.getMinutes()];
+      var getDate, min, month, second, year, _ref;
+      getDate = function() {
+        var date;
+        date = new Date();
+        return [date.getFullYear(), date.getMonth() + 1, date.getMinutes(), date.getSeconds()];
+      };
+      _ref = getDate(), year = _ref[0], month = _ref[1], min = _ref[2], second = _ref[3];
+      return [
+        function(cond) {
+          var cur_min, cur_month, cur_second, cur_year, _ref1, _ref2;
+          _ref1 = getDate(), cur_year = _ref1[0], cur_month = _ref1[1], cur_min = _ref1[2], cur_second = _ref1[3];
+          if ((cond != null)) {
+            cond([year, month, min, second], [cur_year, cur_month, cur_min, cur_second]);
+          }
+          return _ref2 = [cur_year, cur_month, cur_min, cur_second], year = _ref2[0], month = _ref2[1], min = _ref2[2], second = _ref2[3], _ref2;
+        }, function() {
+          return [year, month, min, second];
+        }
+      ];
     };
-    _ref = update_date(), year = _ref[0], month = _ref[1], min = _ref[2];
+    _ref = update_date(), update_date_function = _ref[0], get_date = _ref[1];
+    _ref1 = get_date(), year = _ref1[0], month = _ref1[1];
     return mongodb.operate(function(collection) {
-      var begin_streaming, collection_keep, stream;
+      var begin_streaming, stream;
       twitterstream = require('twitter-stream');
-      stream = twitterstream.connect(twitter_options);
-      collection_keep = collection;
-      begin_streaming = function(stream) {
+      stream = null;
+      setInterval(function() {
+        return update_date_function(function(old_date, new_date) {
+          if (old_date[3] + 10 <= new_date[3]) {
+            if (stream != null) {
+              stream.about();
+            }
+            return begin_streaming();
+          }
+        });
+      }, 10000);
+      begin_streaming = function() {
+        var collection_keep;
+        stream = twitterstream.connect(twitter_options);
+        collection_keep = collection;
         stream.on('error', function(err) {
           console.log('error:');
           return console.log(err);
         });
         return stream.on('status', function(tweet) {
-          var cur_min, cur_month, cur_year, _ref1, _ref2,
-            _this = this;
           try {
             if (tweet.text != null) {
+              console.log(tweet.user.screen_name + ': ' + tweet.text);
               if (collection_keep != null) {
                 collection_keep.insert(tweet, {
                   safe: true
@@ -114,19 +142,21 @@
           } catch (error) {
             console.log(error);
           }
-          _ref1 = update_date(), cur_year = _ref1[0], cur_month = _ref1[1], cur_min = _ref1[2];
-          if (cur_month !== month) {
-            console.log("Create new collection: " + cur_year + "_" + cur_month);
-            collection_keep = null;
-            mongodb.close();
-            _ref2 = [cur_year, cur_month, cur_min], year = _ref2[0], month = _ref2[1], min = _ref2[2];
-            return mongodb.operate(function(collection, close_handler) {
-              return collection_keep = collection;
-            }, "" + config.mongodb.db + "_" + year + "_" + month);
-          }
+          return update_date_function(function(old_date, new_date) {
+            var _this = this;
+            if (old_date[1] !== new_date[1]) {
+              year = new_date[0], month = new_date[1];
+              console.log("Create new collection: " + year + "_" + month);
+              collection_keep = null;
+              mongodb.close();
+              return mongodb.operate(function(collection, close_handler) {
+                return collection_keep = collection;
+              }, "" + config.mongodb.db + "_" + year + "_" + month);
+            }
+          });
         });
       };
-      return begin_streaming(stream);
+      return begin_streaming();
     }, "" + config.mongodb.db + "_" + year + "_" + month);
   });
 

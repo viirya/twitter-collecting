@@ -20,7 +20,7 @@ options = cli.parse
 prompt.start();
 properties = [
         name: 'username', 
-        validator: /^[a-zA-Z\s\-]+$/,
+        validator: /^[a-zA-Z\s\-_]+$/,
         warning: 'Name must be only letters, spaces, or dashes',
         empty: false
     ,
@@ -61,21 +61,43 @@ collecting = (cb) ->
     else
         twitter_options.params.locations = '-180,-90,180,90'
 
-    update_date = ->
-        date = new Date!
-        [date.getFullYear!, date.getMonth! + 1, date.getMinutes!]
-    
-    [year, month, min] = update_date!
+    update_date = () ->
+
+        getDate = () ->
+            date = new Date!
+            [date.getFullYear!, date.getMonth! + 1, date.getMinutes!, date.getSeconds!]
+
+        [year, month, min, second] = getDate!
+
+        [(cond) ->
+            [cur_year, cur_month, cur_min, cur_second] = getDate!
+            if (cond?)
+                cond([year, month, min, second], [cur_year, cur_month, cur_min, cur_second])
+            [year, month, min, second] = [cur_year, cur_month, cur_min, cur_second]
+        , () ->
+            [year, month, min, second]]
+
+    # initiate date
+    [update_date_function, get_date] = update_date!
+
+    [year, month] = get_date!
 
     (collection) <~ mongodb.operate(_, "#{config.mongodb.db}_#{year}_#{month}")
 
         twitterstream = require('twitter-stream')
-        stream = twitterstream.connect(twitter_options)
+        stream = null
+ 
+        () <- setInterval(_, 10000)
+            (old_date, new_date) <- update_date_function!
+                if old_date[3] + 10 <= new_date[3]
+                    if stream?
+                        stream.about!
+                    begin_streaming!
 
-        collection_keep = collection
-
-        begin_streaming = (stream) ->
-
+        begin_streaming = () ->
+            stream = twitterstream.connect(twitter_options)
+            collection_keep = collection
+ 
             (err) <- stream.on('error', _)
                 console.log('error:')
                 console.log(err)
@@ -84,7 +106,7 @@ collecting = (cb) ->
                 #console.log(tweet)
                 try
                     if tweet.text?
-                        #console.log tweet.user.screen_name + ': ' + tweet.text
+                        console.log tweet.user.screen_name + ': ' + tweet.text
                         if collection_keep?
                             (err, result) <- collection_keep.insert(tweet, {safe:true}, _)
                                 assert.equal(null, err)
@@ -97,19 +119,19 @@ collecting = (cb) ->
                         throw 'unknown tweet type'
                 catch error
                     console.log(error)
+
+
+                (old_date, new_date) <- update_date_function!
+                    if old_date[1] isnt new_date[1] 
+                        [year, month] = new_date
+                        console.log("Create new collection: #{year}_#{month}")
+                        
+                        collection_keep = null
+                        mongodb.close!
+                        
+                        (collection, close_handler) <~ mongodb.operate(_, "#{config.mongodb.db}_#{year}_#{month}")
+                            collection_keep = collection
+
+        begin_streaming! 
+
  
-                [cur_year, cur_month, cur_min] = update_date!
-
-                if cur_month isnt month
-                    console.log("Create new collection: #{cur_year}_#{cur_month}")
-
-                    collection_keep = null
-                    mongodb.close!
-                    
-                    [year, month, min] = [cur_year, cur_month, cur_min]
-
-                    (collection, close_handler) <~ mongodb.operate(_, "#{config.mongodb.db}_#{year}_#{month}")
-                        collection_keep = collection
-
-        begin_streaming(stream)
-
