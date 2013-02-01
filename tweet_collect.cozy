@@ -91,7 +91,7 @@ collecting = (cb) ->
             (old_date, new_date) <- update_date_function!
                 if old_date[3] + 10 <= new_date[3]
                     if stream?
-                        stream.about!
+                        stream.abort!
                     begin_streaming!
 
         begin_streaming = () ->

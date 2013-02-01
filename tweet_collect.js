@@ -107,7 +107,7 @@
         return update_date_function(function(old_date, new_date) {
           if (old_date[3] + 10 <= new_date[3]) {
             if (stream != null) {
-              stream.about();
+              stream.abort();
             }
             return begin_streaming();
           }
