@@ -28,7 +28,7 @@
     username: ['u', 'Your twitter username', 'string'],
     password: ['p', 'Your twitter password', 'string'],
     track: ['t', 'The keywords to track', 'string', ''],
-    location: ['l', 'Geo-locaton of tweets to collect', 'string', '']
+    location: ['l', 'Geo-locaton of tweets to collect', 'string']
   });
 
   decodeLocation = function(cb) {
