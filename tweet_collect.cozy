@@ -7,7 +7,9 @@ cli = require('cli')
 prompt = require('prompt')
 #mongo = require('mongodb')
 MongoDatabase = require('./mongo').MongoDatabase
+Geo = require('./geo').Geo
 twitterstream = require('twitter-stream')
+
 config = require('./config')
 assert = require('assert')
 
@@ -16,11 +18,38 @@ options = cli.parse
   username: ['u', 'Your twitter username', 'string'],
   password: ['p', 'Your twitter password', 'string'],
   track: ['t', 'The keywords to track', 'string', ''],
+  location: ['l', 'Geo-locaton of tweets to collect', 'string', ''],
+
+decodeLocation = (cb) ->
+    if (options.location?)
+        console.log("Decoding the geolocation of #{options.location}")
+        geo = new Geo
+        geo.decode(options.location, (data) =>
+            if (data.results[0].geometry?)
+                console.log(data.results[0].geometry)
+    
+                search_bbox =
+                    min_lng: data.results[0].geometry.viewport.southwest.lng
+                    min_lat: data.results[0].geometry.viewport.southwest.lat
+                    max_lng: data.results[0].geometry.viewport.northeast.lng
+                    max_lat: data.results[0].geometry.viewport.northeast.lat
+    
+                search_bbox_string = "#{search_bbox.min_lng},#{search_bbox.min_lat},#{search_bbox.max_lng},#{search_bbox.max_lat}"
+    
+                console.log("Constructing flickr bbox search argument: #{search_bbox_string}")
+                options.bbox = search_bbox_string
+                cb()
+            else
+                console.log("Error in decoding geolocation")
+        )
+    else
+        cb()
+
 
 prompt.start();
 properties = [
         name: 'username', 
-        validator: /^[a-zA-Z\s\-_]+$/,
+        validator: /^[a-zA-Z\s\-_0-9]+$/,
         warning: 'Name must be only letters, spaces, or dashes',
         empty: false
     ,
@@ -43,7 +72,7 @@ collecting = (cb) ->
         options.password = result.password
         config.mongodb.username = result.db_username
         config.mongodb.password = result.db_password
-        cb()
+        decodeLocation(cb)
 
 () <- collecting!
 
@@ -59,7 +88,10 @@ collecting = (cb) ->
     if options.track? and options.track isnt ''
         twitter_options.params.track = options.track
     else
-        twitter_options.params.locations = '-180,-90,180,90'
+        if options.bbox?
+            twitter_options.params.locations = options.bbox
+        else
+            twitter_options.params.locations = '-180,-90,180,90'
 
     update_date = () ->
 
@@ -82,7 +114,9 @@ collecting = (cb) ->
 
     [year, month] = get_date!
 
-    (collection) <~ mongodb.operate(_, "#{config.mongodb.db}_#{year}_#{month}")
+    location = if options.location? then "_#{options.location}".replace(/\s/g, "_") else ""
+
+    (collection) <~ mongodb.operate(_, "#{config.mongodb.db}#{location}_#{year}_#{month}")
 
         twitterstream = require('twitter-stream')
         stream = null
@@ -129,7 +163,7 @@ collecting = (cb) ->
                         collection_keep = null
                         mongodb.close!
                         
-                        (collection, close_handler) <~ mongodb.operate(_, "#{config.mongodb.db}_#{year}_#{month}")
+                        (collection, close_handler) <~ mongodb.operate(_, "#{config.mongodb.db}#{location}_#{year}_#{month}")
                             collection_keep = collection
 
         begin_streaming! 
