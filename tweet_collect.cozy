@@ -9,14 +9,16 @@ prompt = require('prompt')
 MongoDatabase = require('./mongo').MongoDatabase
 Geo = require('./geo').Geo
 twitterstream = require('twitter-stream')
+Stream = require('twitter-stream-oauth')
+
+renew_twitter_client = (params) ->
+    new Stream(params)
 
 config = require('./config')
 assert = require('assert')
 
 
 options = cli.parse
-  username: ['u', 'Your twitter username', 'string'],
-  password: ['p', 'Your twitter password', 'string'],
   track: ['t', 'The keywords to track', 'string', ''],
   location: ['l', 'Geo-locaton of tweets to collect', 'string'],
 
@@ -48,14 +50,6 @@ decodeLocation = (cb) ->
 
 prompt.start();
 properties = [
-        name: 'username', 
-        validator: /^[a-zA-Z\s\-_0-9]+$/,
-        warning: 'Name must be only letters, spaces, or dashes',
-        empty: false
-    ,
-        name: 'password',
-        hidden: true
-    ,
         name: 'db_username', 
         validator: /^[a-zA-Z\s\-]+$/,
         warning: 'Name must be only letters, spaces, or dashes',
@@ -68,8 +62,6 @@ properties = [
 
 collecting = (cb) ->
     (err, result) <- prompt.get(properties, _)
-        options.username = result.username
-        options.password = result.password
         config.mongodb.username = result.db_username
         config.mongodb.password = result.db_password
         decodeLocation(cb)
@@ -80,18 +72,22 @@ collecting = (cb) ->
     mongodb.init() 
  
     twitter_options =
-        screen_name: options.username
-        password: options.password
         action: 'filter' 
         params: {}
-
+        consumer_key: '',
+        consumer_secret: '',
+        access_token_key: '',
+        access_token_secret: '',
+        api: 'filter',
+        api_params: {'locations': "-180,-90,180,90"}    
+ 
     if options.track? and options.track isnt ''
-        twitter_options.params.track = options.track
+        twitter_options.api_params['track'] = options.track
     else
         if options.bbox?
-            twitter_options.params.locations = options.bbox
+            twitter_options.api_params['locations'] = options.bbox
         else
-            twitter_options.params.locations = '-180,-90,180,90'
+            twitter_options.api_params['locations'] = '-180,-90,180,90'
 
     update_date = () ->
 
@@ -118,25 +114,25 @@ collecting = (cb) ->
 
     (collection) <~ mongodb.operate(_, "#{config.mongodb.db}#{location}_#{year}_#{month}")
 
-        twitterstream = require('twitter-stream')
         stream = null
  
         () <- setInterval(_, 10000)
             (old_date, new_date) <- update_date_function!
                 if old_date[3] + 10 <= new_date[3]
                     if stream?
-                        stream.abort!
+                        stream = null
                     begin_streaming!
 
         begin_streaming = () ->
-            stream = twitterstream.connect(twitter_options)
+            stream = renew_twitter_client(twitter_options)
+            stream.stream!
             collection_keep = collection
  
             (err) <- stream.on('error', _)
                 console.log('error:')
                 console.log(err)
             
-            (tweet) <- stream.on('status', _)
+            (tweet) <- stream.on('data', _)
                 #console.log(tweet)
                 try
                     if tweet.text?

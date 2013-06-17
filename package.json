@@ -20,6 +20,7 @@
     "natural": "latest",
     "webworker": "latest",
     "twitter-stream": "latest",
+    "twitter-stream-oauth": "latest",
     "geocoder": "latest",
     "cozy-script": "latest"
   },
